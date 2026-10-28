@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shira's Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: a lined-paper week — five weekday columns plus a stacked weekend column, a Someday list below, deadlines strip on top */
+:root{
+  --bg:#fbfdfc; --paper:#ffffff; --ink:#15201d; --muted:#5c6b66; --faint:#a0aca8;
+  --line:#e4ebe9; --accent:#0ea47a; --accent-ink:#ffffff; --accent-soft:#d6f7ec; --today-bg:#f0fcf7;
+  --deadline:#f0510f; --deadline-soft:#ffe4d6;
+  --event:#2f6ff0; --event-soft:#dfe9ff;
+  --tag-blue:#bcd6ff; --tag-green:#b6f0c8; --tag-amber:#ffe28a; --tag-rose:#ffc4d3; --tag-violet:#dccbff;
+  --shadow:0 12px 40px rgba(20,40,34,.18);
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1513; --paper:#161e1b; --ink:#eaf2ef; --muted:#93a39d; --faint:#5f6d68;
+  --line:#25312d; --accent:#2ee0a8; --accent-ink:#06231a; --accent-soft:#123a2e; --today-bg:#122520;
+  --deadline:#ff7a3d; --deadline-soft:#3d2214;
+  --event:#6f9dff; --event-soft:#1b2a4d;
+  --tag-blue:#1f3f80; --tag-green:#1a5a36; --tag-amber:#6a5410; --tag-rose:#6d2440; --tag-violet:#4a2f86;
+  --shadow:0 12px 40px rgba(0,0,0,.5); color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0f1513; --paper:#161e1b; --ink:#eaf2ef; --muted:#93a39d; --faint:#5f6d68;
+  --line:#25312d; --accent:#2ee0a8; --accent-ink:#06231a; --accent-soft:#123a2e; --today-bg:#122520;
+  --deadline:#ff7a3d; --deadline-soft:#3d2214;
+  --event:#6f9dff; --event-soft:#1b2a4d;
+  --tag-blue:#1f3f80; --tag-green:#1a5a36; --tag-amber:#6a5410; --tag-rose:#6d2440; --tag-violet:#4a2f86;
+  --shadow:0 12px 40px rgba(0,0,0,.5); color-scheme:dark;}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.4;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+button,select{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px}
+.title h1{font-family:var(--f-display);font-weight:700;font-size:clamp(26px,3.4vw,38px);letter-spacing:-.02em;margin:0;line-height:1}
+.title p{margin:6px 0 0;color:var(--muted);font-size:13px;letter-spacing:.04em;text-transform:uppercase}
+.nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:7px 12px;font-weight:500}
+.btn:hover{border-color:var(--faint)}
+.btn.icon{width:36px;padding:7px 0;text-align:center}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.status{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{font-size:12px;color:var(--muted);border:1px dashed var(--line);border-radius:999px;padding:4px 10px;white-space:nowrap;background:transparent}
+.pill.ok{border-style:solid;color:var(--accent);border-color:var(--accent-soft);background:var(--accent-soft)}
+.pill.cal.ok{color:var(--event);border-color:var(--event-soft);background:var(--event-soft)}
+.pill.warn{border-style:solid;color:var(--deadline);border-color:var(--deadline-soft);background:var(--deadline-soft)}
+button.pill{cursor:pointer}
+select.pill{appearance:none;padding-right:22px;background:var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23889' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 8px center;border-style:solid}
+
+.deadlines{display:flex;gap:10px;align-items:center;flex-wrap:wrap;min-height:32px}
+.deadlines .lbl{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--deadline)}
+.dl{display:flex;gap:8px;align-items:baseline;background:var(--deadline-soft);border-radius:8px;padding:6px 10px;border:0;text-align:left;max-width:100%}
+.dl b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:28ch}
+.dl span{color:var(--deadline);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.deadlines .empty{color:var(--faint);font-size:13px}
+
+.board{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) minmax(0,1fr);gap:0 22px;align-items:start}
+.weekend{display:flex;flex-direction:column;gap:18px}
+.day{min-width:0}
+.day h3{display:flex;align-items:baseline;justify-content:space-between;margin:0;padding:0 2px 8px;border-bottom:2px solid var(--ink);font-family:var(--f-display);font-weight:500}
+.day h3 .dow,.day h3 .num{font-size:15px}
+.day h3 .num{color:var(--muted);font-variant-numeric:tabular-nums}
+.day.past h3{border-color:var(--faint);color:var(--muted)}
+.day.today h3{border-color:var(--accent);color:var(--accent);border-bottom-width:3px}
+.day.today h3 .num{background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:0 6px;font-weight:700}
+.day.today ul.lines{background:var(--today-bg)}
+ul.lines{list-style:none;margin:0;padding:0;min-height:40px;border-radius:0 0 4px 4px}
+.day.drop ul.lines{background:var(--accent-soft)}
+li.row{min-height:34px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:0 4px}
+li.task{cursor:grab;border-radius:4px}
+li.task:hover{box-shadow:inset 0 0 0 1.5px var(--accent)}
+li.task.dragging{opacity:.35}
+li.task[data-color="blue"]{background:var(--tag-blue)} li.task[data-color="green"]{background:var(--tag-green)}
+li.task[data-color="amber"]{background:var(--tag-amber)} li.task[data-color="rose"]{background:var(--tag-rose)}
+li.task[data-color="violet"]{background:var(--tag-violet)}
+li.task.is-deadline:not([data-color]){background:var(--deadline-soft)}
+.check{flex:none;width:16px;height:16px;border-radius:50%;border:1.5px solid var(--muted);background:transparent;padding:0;display:grid;place-items:center}
+.check:hover{border-color:var(--accent)}
+li.done .check{background:var(--accent);border-color:var(--accent)}
+li.done .check::after{content:"";width:7px;height:4px;border-left:2px solid var(--accent-ink);border-bottom:2px solid var(--accent-ink);transform:rotate(-45deg) translate(1px,-1px)}
+.txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;padding:6px 0}
+li.done .txt{text-decoration:line-through;color:var(--muted)}
+.flag{flex:none;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--paper);background:var(--deadline);border-radius:4px;padding:2px 5px}
+.note-dot{flex:none;width:5px;height:5px;border-radius:50%;background:var(--muted)}
+.cal-dot{flex:none;width:7px;height:7px;border-radius:2px;background:var(--event)}
+li.event{padding:0}
+li.event a{display:flex;align-items:center;gap:6px;width:100%;min-height:28px;margin:3px 0;padding:0 8px;border-radius:6px;background:var(--event-soft);color:var(--ink);text-decoration:none;font-size:12.5px;min-width:0}
+li.event a:hover{box-shadow:inset 0 0 0 1.5px var(--event)}
+li.event .t{font-variant-numeric:tabular-nums;color:var(--event);font-weight:700;flex:none}
+li.event .e{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+input.add{flex:1;min-width:0;border:0;background:transparent;font:inherit;color:var(--ink);padding:6px 0;outline:none}
+input.add::placeholder{color:transparent}
+li.addrow:hover input.add::placeholder,input.add:focus::placeholder{color:var(--faint)}
+li.blank{cursor:text}
+
+.someday{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 22px}
+.someday .day h3{border-color:var(--muted)}
+.hint{color:var(--muted);font-size:12.5px;margin:0}
+
+.overlay{position:fixed;inset:0;background:rgba(10,20,17,.4);display:grid;place-items:center;padding:16px;z-index:20}
+.sheet{background:var(--paper);border-radius:14px;box-shadow:var(--shadow);width:min(440px,100%);padding:20px;display:flex;flex-direction:column;gap:14px;max-height:calc(100% - 32px);overflow:auto}
+.sheet input[type=text],.sheet textarea,.sheet input[type=date]{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.sheet #f-text{font-family:var(--f-display);font-size:18px;font-weight:500}
+.sheet textarea{min-height:80px;resize:vertical}
+.field{display:flex;flex-direction:column;gap:6px}
+.field>span{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.inline{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.inline label{display:flex;gap:6px;align-items:center}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.sw{width:28px;height:28px;border-radius:50%;border:2px solid var(--line);padding:0}
+.sw[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 0 0 2px var(--paper) inset}
+.sw[data-c=""]{background:var(--paper)} .sw[data-c=blue]{background:var(--tag-blue)} .sw[data-c=green]{background:var(--tag-green)}
+.sw[data-c=amber]{background:var(--tag-amber)} .sw[data-c=rose]{background:var(--tag-rose)} .sw[data-c=violet]{background:var(--tag-violet)}
+.cal-note{font-size:12.5px;color:var(--muted);margin:0}
+.actions{display:flex;justify-content:space-between;gap:8px}
+.btn.danger{color:var(--deadline)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:8px;font-size:13px;z-index:30;max-width:calc(100% - 32px)}
+
+@media (max-width:1100px){
+  .board{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 22px}
+  .weekend{display:contents}
+  .someday{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:620px){
+  .board,.someday{grid-template-columns:minmax(0,1fr)}
+  li.task{cursor:default}
+}
+
+.setup summary{cursor:pointer;font-weight:600}
+.setup ol{padding-left:20px;display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.setup code{font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:1px 4px;word-break:break-all}
+.setup a{color:var(--event)}
+#s-client{font-family:ui-monospace,Menlo,monospace;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title">
+      <h1 id="month">October 2026</h1>
+      <p id="weekLabel">Week 44</p>
+    </div>
+    <div class="nav">
+      <div class="status">
+        <span id="gSlot"></span>
+        <button class="pill" id="settingsBtn" type="button">Settings</button>
+      </div>
+      <button class="btn icon" id="prev" aria-label="Previous week">‹</button>
+      <button class="btn primary" id="todayBtn">Today</button>
+      <button class="btn icon" id="next" aria-label="Next week">›</button>
+    </div>
+  </header>
+
+  <div class="deadlines" id="deadlines"></div>
+  <main class="board" id="board"></main>
+  <section class="someday" id="someday"></section>
+  <p class="hint">Click any line to add a task and press Enter. Start a task with <b>!</b> to mark it as a deadline. Blue items come from Google Calendar. Drag tasks between days, click one to edit it. Use ← → to change weeks. Tasks are saved in this browser, so use Settings → Export backup now and then.</p>
+</div>
+
+<!-- task editor -->
+<div class="overlay" id="overlay" hidden>
+  <form class="sheet" id="sheet" autocomplete="off">
+    <input type="text" id="f-text" aria-label="Task">
+    <div class="field"><span>Date</span>
+      <div class="inline">
+        <input type="date" id="f-date" style="flex:1;min-width:150px">
+        <label><input type="checkbox" id="f-someday"> Someday</label>
+      </div>
+    </div>
+    <div class="field"><span>Type</span>
+      <div class="inline"><label><input type="checkbox" id="f-deadline"> This is a deadline</label></div>
+    </div>
+    <div class="field"><span>Color</span>
+      <div class="swatches" id="swatches">
+        <button type="button" class="sw" data-c="" aria-label="No color"></button>
+        <button type="button" class="sw" data-c="blue" aria-label="Blue"></button>
+        <button type="button" class="sw" data-c="green" aria-label="Green"></button>
+        <button type="button" class="sw" data-c="amber" aria-label="Amber"></button>
+        <button type="button" class="sw" data-c="rose" aria-label="Rose"></button>
+        <button type="button" class="sw" data-c="violet" aria-label="Violet"></button>
+      </div>
+    </div>
+    <div class="field"><span>Notes</span><textarea id="f-notes"></textarea></div>
+    <p class="cal-note" id="f-gnote"></p>
+    <div class="actions">
+      <button type="button" class="btn danger" id="f-delete">Delete</button>
+      <div class="inline" style="gap:8px">
+        <button type="button" class="btn" id="f-cancel">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- settings -->
+<div class="overlay" id="settings" hidden>
+  <div class="sheet" style="width:min(560px,100%)">
+    <h2 style="margin:0;font-family:var(--f-display);font-weight:700;font-size:22px">Settings</h2>
+
+    <div class="field"><span>Google connection</span>
+      <p class="cal-note">Paste the OAuth Client ID from your Google Cloud project (setup steps below), then connect. The planner reads your Google Calendar and adds your tasks to Google Tasks, which appear in Google Calendar on their dates.</p>
+      <input type="text" id="s-client" placeholder="1234567890-abc123.apps.googleusercontent.com" spellcheck="false">
+      <div class="inline" style="gap:8px">
+        <button type="button" class="btn primary" id="s-connect">Connect Google</button>
+        <button type="button" class="btn" id="s-disconnect">Disconnect</button>
+      </div>
+    </div>
+
+    <div class="field"><span>Send to Google Tasks</span>
+      <select id="s-sync" class="pill" style="align-self:flex-start;font-size:13px">
+        <option value="all">All tasks + deadlines</option>
+        <option value="deadlines">Deadlines only</option>
+        <option value="off">Nothing</option>
+      </select>
+    </div>
+
+    <div class="field"><span>Backup</span>
+      <div class="inline" style="gap:8px">
+        <button type="button" class="btn" id="s-export">Export backup</button>
+        <label class="btn" for="s-import" style="cursor:pointer">Import backup</label>
+        <input type="file" id="s-import" accept="application/json,.json" hidden>
+      </div>
+    </div>
+
+    <details class="setup">
+      <summary>One-time Google setup (about 10 minutes)</summary>
+      <ol>
+        <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a> and create a project (any name, e.g. "Planner").</li>
+        <li>Open <b>APIs &amp; Services → Library</b> and enable <b>Google Calendar API</b> and <b>Google Tasks API</b>.</li>
+        <li>Open <b>Google Auth Platform</b> (or <b>OAuth consent screen</b>), choose <b>External</b>, fill in the app name and your email. Under <b>Audience → Test users</b>, add your own Gmail address.</li>
+        <li>Open <b>Clients</b> (or <b>Credentials</b>) → <b>Create client</b> → type <b>Web application</b>. Under <b>Authorized JavaScript origins</b>, add the address this page runs from: <code id="originHint"></code></li>
+        <li>Copy the <b>Client ID</b>, paste it above, and press <b>Connect Google</b>. Google will warn that the app isn't verified; choose <b>Continue</b>, since it's your own app.</li>
+      </ol>
+      <p class="cal-note">Google sign-in doesn't work when the file is opened by double-clicking (a <code>file://</code> address). Run it from GitHub Pages or a local server instead; see the instructions that came with the file.</p>
+    </details>
+
+    <div class="actions" style="justify-content:flex-end">
+      <button type="button" class="btn primary" id="s-close">Done</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://accounts.google.com/gsi/client" async></script>
+<script>
+const $=s=>document.querySelector(s);
+const pad=n=>String(n).padStart(2,'0');
+const keyOf=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseKey=k=>{const [y,m,d]=k.split('-').map(Number);return new Date(y,m-1,d);};
+const addDays=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+const mondayOf=d=>{const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());return addDays(x,-((x.getDay()+6)%7));};
+const isDated=k=>/^\d{4}-\d{2}-\d{2}$/.test(k||'');
+function isoWeek(d){const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));const day=t.getUTCDay()||7;t.setUTCDate(t.getUTCDate()+4-day);const y0=new Date(Date.UTC(t.getUTCFullYear(),0,1));return Math.ceil(((t-y0)/864e5+1)/7);}
+const DOW=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const SOMEDAY=[['someday','Someday'],['reading','To read'],['ideas','Ideas']];
+const newId=()=>'t'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const MARK="Added from Shira's Planner · id:";
+const SCOPES='https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks';
+const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v;}catch(e){return d;}},set(k,v){try{localStorage.setItem(k,v);}catch(e){}}};
+
+let weekStart=mondayOf(new Date());
+let events={};
+let syncMode=ls.get('planner.sync','all');
+
+/* ---------- task storage (this browser) ---------- */
+const store={
+  tasks:new Map(),
+  load(){try{const a=JSON.parse(ls.get('planner.tasks','[]'));this.tasks=new Map(a.map(t=>[t.id,t]));}catch(e){this.tasks=new Map();}},
+  save(){ls.set('planner.tasks',JSON.stringify([...this.tasks.values()]));},
+  put(t,quiet){this.tasks.set(t.id,t);this.save();if(!quiet)render();},
+  remove(id){this.tasks.delete(id);this.save();render();}
+};
+window.addEventListener('storage',e=>{if(e.key==='planner.tasks'){store.load();render();}});
+const tasksFor=k=>[...store.tasks.values()].filter(t=>t.date===k).sort((a,b)=>(a.order??0)-(b.order??0)||(a.created??0)-(b.created??0));
+
+/* ---------- Google auth ---------- */
+const G={client:null,token:null,exp:0,state:'off',waiters:[]};
+function clientId(){return ls.get('planner.clientId','').trim();}
+function setG(state,msg){
+  G.state=state;
+  const slot=$('#gSlot');slot.replaceChildren();
+  const el=document.createElement(state==='ok'||state==='busy'?'span':'button');
+  el.className='pill cal'+(state==='ok'?' ok':(state==='off'?'':' warn'));
+  el.textContent={ok:'Google linked',busy:'Connecting to Google…',off:'Connect Google',expired:'Reconnect Google',error:'Google error · Retry',setup:'Set up Google'}[state]||'Connect Google';
+  if(el.tagName==='BUTTON'){el.type='button';el.onclick=()=>clientId()?connect(true):openSettings();}
+  if(msg) el.title=msg;
+  slot.append(el);
+}
+function initClient(){
+  const id=clientId();
+  if(!id||!(window.google&&google.accounts&&google.accounts.oauth2)) return false;
+  if(G.client&&G.client._id===id) return true;
+  G.client=google.accounts.oauth2.initTokenClient({client_id:id,scope:SCOPES,callback:onToken,error_callback:onTokenError});
+  G.client._id=id;return true;
+}
+function onToken(r){
+  if(r&&r.access_token){
+    G.token=r.access_token;G.exp=Date.now()+((r.expires_in||3600)-60)*1000;
+    ls.set('planner.gConnected','1');setG('ok');
+    G.waiters.splice(0).forEach(w=>w.res(G.token));
+    loadEvents();flushPending();
+  }else onTokenError(r);
+}
+function onTokenError(err){
+  G.token=null;
+  const msg=(err&&(err.error_description||err.message||err.type||err.error))||'Sign-in was cancelled';
+  setG(clientId()?'off':'setup',msg);
+  G.waiters.splice(0).forEach(w=>w.rej(new Error(msg)));
+}
+function connect(interactive){
+  if(location.protocol==='file:'){toast('Google sign-in needs the page served from a web address, not opened as a file. See the setup notes.');openSettings();return;}
+  if(!clientId()){openSettings();return;}
+  if(!initClient()){toast('Google sign-in is still loading. Try again in a moment.');return;}
+  setG('busy');
+  G.client.requestAccessToken({prompt:interactive?'':'none'});
+}
+function getToken(){
+  if(G.token&&Date.now()<G.exp) return Promise.resolve(G.token);
+  return Promise.reject(Object.assign(new Error('not connected'),{code:'auth'}));
+}
+async function gapi(method,url,body){
+  const tok=await getToken();
+  const r=await fetch(url,{method,headers:{Authorization:'Bearer '+tok,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
+  if(r.status===401){G.token=null;setG('expired');throw Object.assign(new Error('expired'),{code:'auth'});}
+  if(r.status===204) return null;
+  if(!r.ok){let t='';try{t=(await r.json()).error.message;}catch(_){}throw Object.assign(new Error(t||('HTTP '+r.status)),{code:r.status});}
+  return r.json();
+}
+
+/* ---------- Google Calendar: read events ---------- */
+function fmtTime(dt){const d=new Date(dt);let h=d.getHours();const m=d.getMinutes();const ap=h>=12?'pm':'am';h=h%12||12;return m?`${h}:${pad(m)}${ap}`:`${h}${ap}`;}
+let loadSeq=0;
+async function loadEvents(){
+  if(!G.token) return;
+  const seq=++loadSeq;
+  const q=new URLSearchParams({timeMin:weekStart.toISOString(),timeMax:addDays(weekStart,7).toISOString(),singleEvents:'true',orderBy:'startTime',maxResults:'250'});
+  try{
+    const p=await gapi('GET','https://www.googleapis.com/calendar/v3/calendars/primary/events?'+q);
+    if(seq!==loadSeq) return;
+    const next={};
+    for(const ev of (p&&p.items)||[]){
+      if(ev.status==='cancelled') continue;
+      const item={title:ev.summary||'(No title)',link:ev.htmlLink||''};
+      const s=ev.start||{},en=ev.end||{};
+      if(s.dateTime){const k=keyOf(new Date(s.dateTime));(next[k]=next[k]||[]).push({...item,time:fmtTime(s.dateTime),sort:new Date(s.dateTime).getTime()});}
+      else if(s.date){let d=parseKey(s.date);const end=en.date?parseKey(en.date):addDays(d,1);for(let i=0;d<end&&i<60;i++,d=addDays(d,1)){const k=keyOf(d);(next[k]=next[k]||[]).push({...item,time:'',sort:0});}}
+    }
+    for(const k in next) next[k].sort((a,b)=>a.sort-b.sort);
+    events=next;render();
+  }catch(e){if(e.code!=='auth'){console.warn(e);setG('error',e.message);}}
+}
+
+/* ---------- Google Tasks: send tasks ---------- */
+const TASKS='https://tasks.googleapis.com/tasks/v1/lists/@default/tasks';
+const syncQ=new Map();
+function wantsSync(t){if(!t||syncMode==='off')return false;return syncMode==='all'||!!t.deadline;}
+function gBody(t){
+  const b={title:(t.deadline?'Due: ':'')+t.text,notes:(t.notes?t.notes+'\n\n':'')+MARK+t.id,status:t.done?'completed':'needsAction'};
+  b.due=isDated(t.date)?t.date+'T00:00:00.000Z':null;
+  return b;
+}
+function sync(id){
+  const t=store.tasks.get(id);if(!t)return;
+  if(!G.token){ // remember for when Google is connected
+    if(wantsSync(t)||t.gTaskId) store.put({...t,gPending:true},true);
+    return;
+  }
+  const next=(syncQ.get(id)||Promise.resolve()).then(()=>doSync(id)).catch(e=>{
+    console.warn(e);const cur=store.tasks.get(id);if(cur)store.put({...cur,gPending:true},true);
+    if(e.code!=='auth')toast('Couldn’t update Google Tasks: '+e.message);
+  });
+  syncQ.set(id,next);
+}
+async function doSync(id){
+  const t=store.tasks.get(id);if(!t)return;
+  const want=wantsSync(t);
+  const clear=(extra)=>{const cur=store.tasks.get(id);if(cur){const c={...cur,...extra};delete c.gPending;store.put(c,true);}};
+  if(want&&!t.gTaskId){
+    const r=await gapi('POST',TASKS,gBody(t));
+    clear({gTaskId:r&&r.id});render();
+  }else if(want&&t.gTaskId){
+    try{await gapi('PATCH',TASKS+'/'+encodeURIComponent(t.gTaskId),gBody(t));clear({});}
+    catch(e){if(e.code===404){const r=await gapi('POST',TASKS,gBody(t));clear({gTaskId:r&&r.id});}else throw e;}
+  }else if(!want&&t.gTaskId){
+    try{await gapi('DELETE',TASKS+'/'+encodeURIComponent(t.gTaskId));}catch(e){if(e.code!==404)throw e;}
+    const cur=store.tasks.get(id);if(cur){const c={...cur};delete c.gTaskId;delete c.gPending;store.put(c,true);render();}
+  }else clear({});
+}
+function unsync(t){
+  if(!t.gTaskId) return;
+  if(!G.token){const q=JSON.parse(ls.get('planner.gDeletes','[]'));q.push(t.gTaskId);ls.set('planner.gDeletes',JSON.stringify(q));return;}
+  gapi('DELETE',TASKS+'/'+encodeURIComponent(t.gTaskId)).catch(e=>{if(e.code!==404)toast('Task deleted here, but not in Google Tasks.');});
+}
+function flushPending(){
+  let q=[];try{q=JSON.parse(ls.get('planner.gDeletes','[]'));}catch(_){}
+  ls.set('planner.gDeletes','[]');
+  q.forEach(id=>gapi('DELETE',TASKS+'/'+encodeURIComponent(id)).catch(()=>{}));
+  [...store.tasks.values()].filter(t=>t.gPending).forEach(t=>sync(t.id));
+}
+
+/* ---------- render ---------- */
+function listSection(key,dow,num,cls,minRows){
+  const sec=document.createElement('section');
+  sec.className='day '+(cls||'');sec.dataset.key=key;
+  sec.innerHTML=`<h3><span class="dow"></span><span class="num"></span></h3><ul class="lines"></ul>`;
+  sec.querySelector('.dow').textContent=dow;sec.querySelector('.num').textContent=num||'';
+  const ul=sec.querySelector('ul');
+  const evs=events[key]||[];
+  evs.forEach(ev=>{
+    const li=document.createElement('li');li.className='row event';
+    const a=document.createElement('a');
+    if(ev.link){a.href=ev.link;a.target='_blank';a.rel='noopener';}
+    a.innerHTML='<span class="t"></span><span class="e"></span>';
+    a.querySelector('.t').textContent=ev.time||'All day';a.querySelector('.e').textContent=ev.title;
+    a.title=ev.title;li.append(a);ul.append(li);
+  });
+  const ts=tasksFor(key);
+  ts.forEach(t=>{
+    const li=document.createElement('li');
+    li.className='row task'+(t.done?' done':'')+(t.deadline?' is-deadline':'');li.dataset.id=t.id;li.draggable=true;
+    if(t.color) li.dataset.color=t.color;
+    li.innerHTML='<button class="check" aria-label="Toggle done"></button><span class="txt"></span>';
+    li.querySelector('.txt').textContent=t.text;
+    if(t.notes){const d=document.createElement('span');d.className='note-dot';d.title='Has notes';li.append(d);}
+    if(t.gTaskId){const d=document.createElement('span');d.className='cal-dot';d.title='In Google Tasks';li.append(d);}
+    if(t.deadline){const f=document.createElement('span');f.className='flag';f.textContent='Due';li.append(f);}
+    ul.append(li);
+  });
+  const add=document.createElement('li');add.className='row addrow';
+  add.innerHTML=`<input class="add" id="add-${key}" data-key="${key}" placeholder="Add a task" aria-label="Add a task">`;
+  ul.append(add);
+  for(let i=ts.length+evs.length+1;i<minRows;i++){const b=document.createElement('li');b.className='row blank';ul.append(b);}
+  return sec;
+}
+function render(){
+  const ae=document.activeElement;let keep=null;
+  if(ae&&ae.classList&&ae.classList.contains('add')) keep={k:ae.dataset.key,v:ae.value,s:ae.selectionStart};
+  const todayKey=keyOf(new Date());
+  const end=addDays(weekStart,6);
+  $('#month').textContent=weekStart.getMonth()===end.getMonth()?`${MON[weekStart.getMonth()]} ${weekStart.getFullYear()}`:`${MON[weekStart.getMonth()].slice(0,3)} – ${MON[end.getMonth()].slice(0,3)} ${end.getFullYear()}`;
+  $('#weekLabel').textContent=`Week ${isoWeek(weekStart)} · ${weekStart.getDate()} ${MON[weekStart.getMonth()].slice(0,3)} – ${end.getDate()} ${MON[end.getMonth()].slice(0,3)}`;
+  const board=$('#board');board.replaceChildren();
+  const weekend=document.createElement('div');weekend.className='weekend';
+  for(let i=0;i<7;i++){
+    const d=addDays(weekStart,i),k=keyOf(d);
+    const cls=k===todayKey?'today':(k<todayKey?'past':'');
+    (i<5?board:weekend).append(listSection(k,DOW[i],d.getDate(),cls,i<5?10:4));
+  }
+  board.append(weekend);
+  const sd=$('#someday');sd.replaceChildren();
+  SOMEDAY.forEach(([k,label])=>sd.append(listSection(k,label,'','',5)));
+  renderDeadlines();
+  if(keep){const el=document.getElementById('add-'+keep.k);if(el){el.value=keep.v;el.focus();try{el.setSelectionRange(keep.s,keep.s);}catch(e){}}}
+}
+function renderDeadlines(){
+  const box=$('#deadlines');box.replaceChildren();
+  const today=parseKey(keyOf(new Date()));
+  const list=[...store.tasks.values()].filter(t=>t.deadline&&!t.done&&isDated(t.date)&&parseKey(t.date)>=today).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6);
+  const lbl=document.createElement('span');lbl.className='lbl';lbl.textContent='Coming up';box.append(lbl);
+  if(!list.length){const e=document.createElement('span');e.className='empty';e.textContent='No deadlines yet. Mark a task as a deadline and it appears here with a countdown.';box.append(e);return;}
+  list.forEach(t=>{
+    const d=parseKey(t.date),n=Math.round((d-today)/864e5);
+    const b=document.createElement('button');b.className='dl';b.type='button';
+    b.innerHTML='<b></b><span></span>';
+    b.querySelector('b').textContent=t.text;
+    b.querySelector('span').textContent=`${DOW[(d.getDay()+6)%7]} ${d.getDate()} ${MON[d.getMonth()].slice(0,3)} · ${n===0?'today':n===1?'tomorrow':'in '+n+' days'}`;
+    b.onclick=()=>{goWeek(mondayOf(d));openEditor(t.id);};
+    box.append(b);
+  });
+}
+function goWeek(ws){weekStart=ws;render();loadEvents();}
+
+/* ---------- interactions ---------- */
+function addTask(key,raw){
+  let text=raw.trim();if(!text)return;
+  let deadline=false;
+  if(text.startsWith('!')){deadline=true;text=text.slice(1).trim();}
+  if(!text)return;
+  const ts=tasksFor(key);
+  const t={id:newId(),text,date:key,done:false,deadline,color:'',notes:'',order:ts.length?(ts[ts.length-1].order??ts.length)+1:0,created:Date.now()};
+  store.put(t);sync(t.id);
+}
+const wrap=document.querySelector('.wrap');
+wrap.addEventListener('keydown',e=>{
+  const t=e.target;
+  if(t.classList.contains('add')){
+    if(e.key==='Enter'){e.preventDefault();const v=t.value;t.value='';addTask(t.dataset.key,v);}
+    else if(e.key==='Escape'){t.value='';t.blur();}
+  }
+});
+wrap.addEventListener('click',e=>{
+  const li=e.target.closest('li');if(!li||li.classList.contains('event'))return;
+  if(e.target.classList.contains('check')){const t=store.tasks.get(li.dataset.id);if(t){store.put({...t,done:!t.done});sync(t.id);}return;}
+  if(li.classList.contains('task')){openEditor(li.dataset.id);return;}
+  if(li.classList.contains('blank')||li.classList.contains('addrow')){li.closest('.day').querySelector('input.add').focus();}
+});
+let dragId=null;
+wrap.addEventListener('dragstart',e=>{const li=e.target.closest&&e.target.closest('li.task');if(!li)return;dragId=li.dataset.id;li.classList.add('dragging');try{e.dataTransfer.setData('text/plain',dragId);e.dataTransfer.effectAllowed='move';}catch(_){}});
+wrap.addEventListener('dragend',()=>{dragId=null;document.querySelectorAll('.dragging,.drop').forEach(x=>x.classList.remove('dragging','drop'));});
+wrap.addEventListener('dragover',e=>{const sec=e.target.closest('.day');if(!sec||!dragId)return;e.preventDefault();document.querySelectorAll('.drop').forEach(x=>x!==sec&&x.classList.remove('drop'));sec.classList.add('drop');});
+wrap.addEventListener('drop',e=>{
+  const sec=e.target.closest('.day');if(!sec||!dragId)return;e.preventDefault();
+  const key=sec.dataset.key,moving=store.tasks.get(dragId);if(!moving)return;
+  const rows=[...sec.querySelectorAll('li.task')].filter(li=>li.dataset.id!==dragId);
+  let idx=rows.findIndex(li=>{const r=li.getBoundingClientRect();return e.clientY<r.top+r.height/2;});
+  if(idx<0)idx=rows.length;
+  const list=tasksFor(key).filter(t=>t.id!==dragId);list.splice(idx,0,{...moving,date:key});
+  list.forEach((t,i)=>{const old=store.tasks.get(t.id);if(!old||old.order!==i||old.date!==key)store.put({...t,date:key,order:i},true);});
+  const movedDay=moving.date!==key,id=dragId;
+  dragId=null;render();
+  if(movedDay)sync(id);
+});
+document.addEventListener('keydown',e=>{
+  if(e.target.closest('input,textarea,select')||!$('#overlay').hidden||!$('#settings').hidden)return;
+  if(e.key==='ArrowLeft')goWeek(addDays(weekStart,-7));
+  if(e.key==='ArrowRight')goWeek(addDays(weekStart,7));
+});
+$('#prev').onclick=()=>goWeek(addDays(weekStart,-7));
+$('#next').onclick=()=>goWeek(addDays(weekStart,7));
+$('#todayBtn').onclick=()=>goWeek(mondayOf(new Date()));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(G.token&&Date.now()>=G.exp){G.token=null;setG('expired');}else loadEvents();}});
+
+/* editor */
+let editing=null,editColor='';
+function setColor(c){editColor=c;document.querySelectorAll('.sw').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===c)));}
+function gNote(t){
+  if(t.gTaskId) return 'This task is in Google Tasks. Changes here update it there.';
+  if(syncMode==='off') return 'Sending to Google Tasks is turned off in Settings.';
+  if(syncMode==='deadlines'&&!t.deadline) return 'Mark this as a deadline to add it to Google Tasks.';
+  return G.token?'This task will be added to Google Tasks.':'Connect Google to add this task to Google Tasks.';
+}
+function openEditor(id){
+  const t=store.tasks.get(id);if(!t)return;editing=id;
+  $('#f-text').value=t.text;
+  const dated=isDated(t.date);
+  $('#f-someday').checked=!dated;$('#f-date').value=dated?t.date:'';$('#f-date').disabled=!dated;
+  $('#f-deadline').checked=!!t.deadline;$('#f-notes').value=t.notes||'';setColor(t.color||'');
+  $('#f-gnote').textContent=gNote(t);
+  $('#overlay').hidden=false;$('#f-text').focus();
+}
+function closeEditor(){$('#overlay').hidden=true;editing=null;}
+$('#swatches').onclick=e=>{const b=e.target.closest('.sw');if(b)setColor(b.dataset.c);};
+$('#f-someday').onchange=e=>{$('#f-date').disabled=e.target.checked;if(!e.target.checked&&!$('#f-date').value)$('#f-date').value=keyOf(new Date());};
+$('#sheet').onsubmit=e=>{
+  e.preventDefault();const t=store.tasks.get(editing);if(!t){closeEditor();return;}
+  const text=$('#f-text').value.trim()||t.text;
+  let date=t.date;
+  if($('#f-someday').checked){if(isDated(date))date='someday';}
+  else if($('#f-date').value)date=$('#f-date').value;
+  const moved=date!==t.date;
+  const nt={...t,text,date,deadline:$('#f-deadline').checked,color:editColor,notes:$('#f-notes').value,order:moved?Date.now():t.order};
+  store.put(nt);closeEditor();sync(nt.id);
+  if(moved&&isDated(date)){const d=parseKey(date);if(keyOf(mondayOf(d))!==keyOf(weekStart))toast(`Moved to ${DOW[(d.getDay()+6)%7]} ${d.getDate()} ${MON[d.getMonth()].slice(0,3)}`);}
+};
+$('#f-cancel').onclick=closeEditor;
+$('#f-delete').onclick=()=>{const t=editing&&store.tasks.get(editing);if(t){unsync(t);store.remove(t.id);toast('Task deleted');}closeEditor();};
+$('#overlay').onclick=e=>{if(e.target.id==='overlay')closeEditor();};
+$('#overlay').addEventListener('keydown',e=>{if(e.key==='Escape')closeEditor();});
+
+/* settings */
+function openSettings(){
+  $('#s-client').value=clientId();$('#s-sync').value=syncMode;
+  $('#originHint').textContent=location.protocol==='file:'?'(the https:// or http://localhost address you host it at)':location.origin;
+  $('#settings').hidden=false;
+}
+$('#settingsBtn').onclick=openSettings;
+$('#s-close').onclick=()=>{$('#settings').hidden=true;};
+$('#settings').onclick=e=>{if(e.target.id==='settings')$('#settings').hidden=true;};
+$('#settings').addEventListener('keydown',e=>{if(e.key==='Escape')$('#settings').hidden=true;});
+$('#s-client').onchange=e=>{ls.set('planner.clientId',e.target.value.trim());G.client=null;if(!G.token)setG(clientId()?'off':'setup');};
+$('#s-connect').onclick=()=>{ls.set('planner.clientId',$('#s-client').value.trim());G.client=null;connect(true);};
+$('#s-disconnect').onclick=()=>{
+  if(G.token&&window.google&&google.accounts&&google.accounts.oauth2)google.accounts.oauth2.revoke(G.token,()=>{});
+  G.token=null;ls.set('planner.gConnected','');events={};render();setG(clientId()?'off':'setup');toast('Disconnected from Google');
+};
+$('#s-sync').onchange=e=>{
+  syncMode=e.target.value;ls.set('planner.sync',syncMode);
+  const today=keyOf(new Date());
+  const affected=[...store.tasks.values()].filter(t=>(!isDated(t.date)||t.date>=today)&&(wantsSync(t)!==!!t.gTaskId));
+  affected.forEach(t=>sync(t.id));
+  toast(affected.length?`Updating ${affected.length} task${affected.length>1?'s':''} in Google Tasks`:'Setting saved');
+};
+$('#s-export').onclick=()=>{
+  const blob=new Blob([JSON.stringify({version:1,exported:new Date().toISOString(),tasks:[...store.tasks.values()]},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`planner-backup-${keyOf(new Date())}.json`;
+  document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+};
+$('#s-import').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    const data=JSON.parse(await f.text());const list=Array.isArray(data)?data:data.tasks;
+    if(!Array.isArray(list))throw new Error('no tasks');
+    let n=0;list.forEach(t=>{if(t&&t.id&&typeof t.text==='string'){store.tasks.set(t.id,t);n++;}});
+    store.save();render();toast(`Imported ${n} task${n===1?'':'s'}`);
+  }catch(err){toast('That file isn’t a planner backup.');}
+  e.target.value='';
+};
+
+let toastTimer;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.hidden=true,3200);}
+
+/* ---------- boot ---------- */
+store.load();render();
+setG(clientId()?'off':'setup');
+window.addEventListener('load',()=>{
+  if(clientId()&&ls.get('planner.gConnected','')&&location.protocol!=='file:'&&initClient()) connect(false);
+});
+</script>
+
+</body>
+</html>
