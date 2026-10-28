@@ -165,7 +165,7 @@ li.blank{cursor:text}
   <div class="deadlines" id="deadlines"></div>
   <main class="board" id="board"></main>
   <section class="someday" id="someday"></section>
-  <p class="hint">Click any line to add a task and press Enter. Start a task with <b>!</b> to mark it as a deadline. Blue items come from Google Calendar. Drag tasks between days, click one to edit it. Use ← → to change weeks. Tasks are saved in this browser, so use Settings → Export backup now and then.</p>
+  <p class="hint">Click any line to add a task and press Enter. Start a task with <b>!</b> to mark it as a deadline. Blue items come from your Google Calendar; your tasks also appear in Google Calendar on the “Tasks and Deadlines” calendar. Drag tasks between days, click one to edit it. Use ← → to change weeks. Tasks are saved in this browser, so use Settings → Export backup now and then.</p>
 </div>
 
 <!-- task editor -->
@@ -209,7 +209,7 @@ li.blank{cursor:text}
     <h2 style="margin:0;font-family:var(--f-display);font-weight:700;font-size:22px">Settings</h2>
 
     <div class="field"><span>Google connection</span>
-      <p class="cal-note">Paste the OAuth Client ID from your Google Cloud project (setup steps below), then connect. The planner reads your Google Calendar and adds your tasks to Google Tasks, which appear in Google Calendar on their dates.</p>
+      <p class="cal-note">Paste the OAuth Client ID from your Google Cloud project (setup steps below), then connect. The planner shows your Google Calendar events and adds your dated tasks to a separate calendar called “Tasks and Deadlines,” which it creates for you.</p>
       <input type="text" id="s-client" placeholder="1234567890-abc123.apps.googleusercontent.com" spellcheck="false">
       <div class="inline" style="gap:8px">
         <button type="button" class="btn primary" id="s-connect">Connect Google</button>
@@ -217,7 +217,7 @@ li.blank{cursor:text}
       </div>
     </div>
 
-    <div class="field"><span>Send to Google Tasks</span>
+    <div class="field"><span>Send to the “Tasks and Deadlines” calendar</span>
       <select id="s-sync" class="pill" style="align-self:flex-start;font-size:13px">
         <option value="all">All tasks + deadlines</option>
         <option value="deadlines">Deadlines only</option>
@@ -237,10 +237,10 @@ li.blank{cursor:text}
       <summary>One-time Google setup (about 10 minutes)</summary>
       <ol>
         <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a> and create a project (any name, e.g. "Planner").</li>
-        <li>Open <b>APIs &amp; Services → Library</b> and enable <b>Google Calendar API</b> and <b>Google Tasks API</b>.</li>
+        <li>Open <b>APIs &amp; Services → Library</b> and enable <b>Google Calendar API</b>.</li>
         <li>Open <b>Google Auth Platform</b> (or <b>OAuth consent screen</b>), choose <b>External</b>, fill in the app name and your email. Under <b>Audience → Test users</b>, add your own Gmail address.</li>
         <li>Open <b>Clients</b> (or <b>Credentials</b>) → <b>Create client</b> → type <b>Web application</b>. Under <b>Authorized JavaScript origins</b>, add the address this page runs from: <code id="originHint"></code></li>
-        <li>Copy the <b>Client ID</b>, paste it above, and press <b>Connect Google</b>. Google will warn that the app isn't verified; choose <b>Continue</b>, since it's your own app.</li>
+        <li>Copy the <b>Client ID</b>, paste it above, and press <b>Connect Google</b>. Google will warn that the app isn't verified; choose <b>Continue</b>, since it's your own app, and allow access to your calendars.</li>
       </ol>
       <p class="cal-note">Google sign-in doesn't work when the file is opened by double-clicking (a <code>file://</code> address). Run it from GitHub Pages or a local server instead; see the instructions that came with the file.</p>
     </details>
@@ -267,7 +267,9 @@ const MON=['January','February','March','April','May','June','July','August','Se
 const SOMEDAY=[['someday','Someday'],['reading','To read'],['ideas','Ideas']];
 const newId=()=>'t'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const MARK="Added from Shira's Planner · id:";
-const SCOPES='https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks';
+const SCOPES='https://www.googleapis.com/auth/calendar';
+const CAL_NAME='Tasks and Deadlines';
+const COLOR_ID={blue:'9',green:'10',amber:'5',rose:'4',violet:'3'};
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v;}catch(e){return d;}},set(k,v){try{localStorage.setItem(k,v);}catch(e){}}};
 
 let weekStart=mondayOf(new Date());
@@ -362,52 +364,98 @@ async function loadEvents(){
   }catch(e){if(e.code!=='auth'){console.warn(e);setG('error',e.message);}}
 }
 
-/* ---------- Google Tasks: send tasks ---------- */
-const TASKS='https://tasks.googleapis.com/tasks/v1/lists/@default/tasks';
+/* ---------- "Tasks and Deadlines" calendar: send tasks ---------- */
+const CALAPI='https://www.googleapis.com/calendar/v3';
 const syncQ=new Map();
-function wantsSync(t){if(!t||syncMode==='off')return false;return syncMode==='all'||!!t.deadline;}
-function gBody(t){
-  const b={title:(t.deadline?'Due: ':'')+t.text,notes:(t.notes?t.notes+'\n\n':'')+MARK+t.id,status:t.done?'completed':'needsAction'};
-  b.due=isDated(t.date)?t.date+'T00:00:00.000Z':null;
+let calIdPromise=null;
+function wantsSync(t){if(!t||!isDated(t.date)||syncMode==='off')return false;return syncMode==='all'||!!t.deadline;}
+function evBody(t){
+  const b={summary:(t.done?'✓ ':'')+(t.deadline?'Due: ':'')+t.text,
+    description:(t.notes?t.notes+'\n\n':'')+MARK+t.id,
+    start:{date:t.date},end:{date:keyOf(addDays(parseKey(t.date),1))},
+    transparency:'transparent',
+    reminders:{useDefault:false,overrides:t.deadline?[{method:'popup',minutes:15*60}]:[]}};
+  const c=t.deadline?'11':COLOR_ID[t.color];b.colorId=c||null;
   return b;
 }
+function ensureCal(){
+  if(calIdPromise) return calIdPromise;
+  calIdPromise=(async()=>{
+    const saved=ls.get('planner.calId','');
+    if(saved){
+      try{await gapi('GET',CALAPI+'/calendars/'+encodeURIComponent(saved));return saved;}
+      catch(e){if(e.code!==404&&e.code!==403)throw e;}
+    }
+    // look for an existing one by name (e.g. made from another browser)
+    let pageToken='';
+    do{
+      const p=await gapi('GET',CALAPI+'/users/me/calendarList?minAccessRole=owner&maxResults=250'+(pageToken?'&pageToken='+encodeURIComponent(pageToken):''));
+      const hit=((p&&p.items)||[]).find(c=>c.summary===CAL_NAME);
+      if(hit){ls.set('planner.calId',hit.id);return hit.id;}
+      pageToken=p&&p.nextPageToken;
+    }while(pageToken);
+    let tz='America/Chicago';try{tz=Intl.DateTimeFormat().resolvedOptions().timeZone||tz;}catch(_){}
+    const c=await gapi('POST',CALAPI+'/calendars',{summary:CAL_NAME,description:"Tasks and deadlines from Shira's Planner",timeZone:tz});
+    ls.set('planner.calId',c.id);
+    toast('Created the “Tasks and Deadlines” calendar');
+    return c.id;
+  })();
+  calIdPromise.catch(()=>{calIdPromise=null;});
+  return calIdPromise;
+}
+function evURL(calId,eid){return CALAPI+'/calendars/'+encodeURIComponent(calId)+'/events'+(eid?'/'+encodeURIComponent(eid):'');}
 function sync(id){
   const t=store.tasks.get(id);if(!t)return;
-  if(!G.token){ // remember for when Google is connected
-    if(wantsSync(t)||t.gTaskId) store.put({...t,gPending:true},true);
+  if(!G.token){
+    if(wantsSync(t)||t.gEventId) store.put({...t,gPending:true},true);
     return;
   }
   const next=(syncQ.get(id)||Promise.resolve()).then(()=>doSync(id)).catch(e=>{
     console.warn(e);const cur=store.tasks.get(id);if(cur)store.put({...cur,gPending:true},true);
-    if(e.code!=='auth')toast('Couldn’t update Google Tasks: '+e.message);
+    if(e.code!=='auth')toast('Couldn’t update Google Calendar: '+e.message);
   });
   syncQ.set(id,next);
 }
-async function doSync(id){
+async function doSync(id,retry){
   const t=store.tasks.get(id);if(!t)return;
   const want=wantsSync(t);
-  const clear=(extra)=>{const cur=store.tasks.get(id);if(cur){const c={...cur,...extra};delete c.gPending;store.put(c,true);}};
-  if(want&&!t.gTaskId){
-    const r=await gapi('POST',TASKS,gBody(t));
-    clear({gTaskId:r&&r.id});render();
-  }else if(want&&t.gTaskId){
-    try{await gapi('PATCH',TASKS+'/'+encodeURIComponent(t.gTaskId),gBody(t));clear({});}
-    catch(e){if(e.code===404){const r=await gapi('POST',TASKS,gBody(t));clear({gTaskId:r&&r.id});}else throw e;}
-  }else if(!want&&t.gTaskId){
-    try{await gapi('DELETE',TASKS+'/'+encodeURIComponent(t.gTaskId));}catch(e){if(e.code!==404)throw e;}
-    const cur=store.tasks.get(id);if(cur){const c={...cur};delete c.gTaskId;delete c.gPending;store.put(c,true);render();}
-  }else clear({});
+  const save=(extra,drop)=>{const cur=store.tasks.get(id);if(!cur)return;const c={...cur,...extra};delete c.gPending;delete c.gTaskId;(drop||[]).forEach(k=>delete c[k]);store.put(c,true);};
+  if(!want&&!t.gEventId){save({});return;}
+  const calId=await ensureCal();
+  try{
+    if(want&&!t.gEventId){
+      const r=await gapi('POST',evURL(calId),evBody(t));
+      save({gEventId:r.id,gCalId:calId});render();
+    }else if(want){
+      try{await gapi('PATCH',evURL(t.gCalId||calId,t.gEventId),evBody(t));save({});}
+      catch(e){
+        if(e.code===404||e.code===410){const r=await gapi('POST',evURL(calId),evBody(t));save({gEventId:r.id,gCalId:calId});}
+        else throw e;
+      }
+    }else{
+      try{await gapi('DELETE',evURL(t.gCalId||calId,t.gEventId));}catch(e){if(e.code!==404&&e.code!==410)throw e;}
+      save({},['gEventId','gCalId']);render();
+    }
+  }catch(e){
+    // calendar was deleted in Google Calendar: make a new one and try once more
+    if((e.code===404||e.code===403)&&!retry){ls.set('planner.calId','');calIdPromise=null;
+      const cur=store.tasks.get(id);if(cur){const c={...cur};delete c.gEventId;delete c.gCalId;store.put(c,true);}
+      return doSync(id,true);}
+    throw e;
+  }
 }
 function unsync(t){
-  if(!t.gTaskId) return;
-  if(!G.token){const q=JSON.parse(ls.get('planner.gDeletes','[]'));q.push(t.gTaskId);ls.set('planner.gDeletes',JSON.stringify(q));return;}
-  gapi('DELETE',TASKS+'/'+encodeURIComponent(t.gTaskId)).catch(e=>{if(e.code!==404)toast('Task deleted here, but not in Google Tasks.');});
+  if(!t.gEventId) return;
+  const calId=t.gCalId||ls.get('planner.calId','');if(!calId)return;
+  if(!G.token){const q=JSON.parse(ls.get('planner.gDeletes2','[]'));q.push([calId,t.gEventId]);ls.set('planner.gDeletes2',JSON.stringify(q));return;}
+  gapi('DELETE',evURL(calId,t.gEventId)).catch(e=>{if(e.code!==404&&e.code!==410)toast('Task deleted here, but not from Google Calendar.');});
 }
 function flushPending(){
-  let q=[];try{q=JSON.parse(ls.get('planner.gDeletes','[]'));}catch(_){}
-  ls.set('planner.gDeletes','[]');
-  q.forEach(id=>gapi('DELETE',TASKS+'/'+encodeURIComponent(id)).catch(()=>{}));
-  [...store.tasks.values()].filter(t=>t.gPending).forEach(t=>sync(t.id));
+  let q=[];try{q=JSON.parse(ls.get('planner.gDeletes2','[]'));}catch(_){}
+  ls.set('planner.gDeletes2','[]');
+  q.forEach(([c,e])=>gapi('DELETE',evURL(c,e)).catch(()=>{}));
+  // pending changes, plus anything from the old Google Tasks version that never got a calendar event
+  [...store.tasks.values()].filter(t=>t.gPending||t.gTaskId||(wantsSync(t)&&!t.gEventId&&t.date>=keyOf(new Date()))).forEach(t=>sync(t.id));
 }
 
 /* ---------- render ---------- */
@@ -434,7 +482,7 @@ function listSection(key,dow,num,cls,minRows){
     li.innerHTML='<button class="check" aria-label="Toggle done"></button><span class="txt"></span>';
     li.querySelector('.txt').textContent=t.text;
     if(t.notes){const d=document.createElement('span');d.className='note-dot';d.title='Has notes';li.append(d);}
-    if(t.gTaskId){const d=document.createElement('span');d.className='cal-dot';d.title='In Google Tasks';li.append(d);}
+    if(t.gEventId){const d=document.createElement('span');d.className='cal-dot';d.title='In Google Calendar';li.append(d);}
     if(t.deadline){const f=document.createElement('span');f.className='flag';f.textContent='Due';li.append(f);}
     ul.append(li);
   });
@@ -536,10 +584,11 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(G.toke
 let editing=null,editColor='';
 function setColor(c){editColor=c;document.querySelectorAll('.sw').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===c)));}
 function gNote(t){
-  if(t.gTaskId) return 'This task is in Google Tasks. Changes here update it there.';
-  if(syncMode==='off') return 'Sending to Google Tasks is turned off in Settings.';
-  if(syncMode==='deadlines'&&!t.deadline) return 'Mark this as a deadline to add it to Google Tasks.';
-  return G.token?'This task will be added to Google Tasks.':'Connect Google to add this task to Google Tasks.';
+  if(t.gEventId) return 'This task is on your “Tasks and Deadlines” calendar. Changes here update it there.';
+  if(!isDated(t.date)) return 'Give this task a date to add it to Google Calendar.';
+  if(syncMode==='off') return 'Sending to Google Calendar is turned off in Settings.';
+  if(syncMode==='deadlines'&&!t.deadline) return 'Mark this as a deadline to add it to Google Calendar.';
+  return G.token?'This task will be added to your “Tasks and Deadlines” calendar.':'Connect Google to add this task to your “Tasks and Deadlines” calendar.';
 }
 function openEditor(id){
   const t=store.tasks.get(id);if(!t)return;editing=id;
@@ -588,9 +637,9 @@ $('#s-disconnect').onclick=()=>{
 $('#s-sync').onchange=e=>{
   syncMode=e.target.value;ls.set('planner.sync',syncMode);
   const today=keyOf(new Date());
-  const affected=[...store.tasks.values()].filter(t=>(!isDated(t.date)||t.date>=today)&&(wantsSync(t)!==!!t.gTaskId));
+  const affected=[...store.tasks.values()].filter(t=>isDated(t.date)&&t.date>=today&&(wantsSync(t)!==!!t.gEventId));
   affected.forEach(t=>sync(t.id));
-  toast(affected.length?`Updating ${affected.length} task${affected.length>1?'s':''} in Google Tasks`:'Setting saved');
+  toast(affected.length?`Updating ${affected.length} task${affected.length>1?'s':''} in Google Calendar`:'Setting saved');
 };
 $('#s-export').onclick=()=>{
   const blob=new Blob([JSON.stringify({version:1,exported:new Date().toISOString(),tasks:[...store.tasks.values()]},null,2)],{type:'application/json'});
