@@ -9,30 +9,16 @@
 <style>
 /* Layout: a lined-paper week — five weekday columns plus a stacked weekend column, a Someday list below, deadlines strip on top */
 :root{
-  --bg:#fbfdfc; --paper:#ffffff; --ink:#15201d; --muted:#5c6b66; --faint:#a0aca8;
-  --line:#e4ebe9; --accent:#0ea47a; --accent-ink:#ffffff; --accent-soft:#d6f7ec; --today-bg:#f0fcf7;
-  --deadline:#f0510f; --deadline-soft:#ffe4d6;
-  --event:#2f6ff0; --event-soft:#dfe9ff;
-  --tag-blue:#bcd6ff; --tag-green:#b6f0c8; --tag-amber:#ffe28a; --tag-rose:#ffc4d3; --tag-violet:#dccbff;
-  --shadow:0 12px 40px rgba(20,40,34,.18);
+  --bg:#0c0a0a; --paper:#151112; --ink:#f2e9ea; --muted:#a8969a; --faint:#5e5054;
+  --line:#2a2022; --accent:#9e2236; --accent-ink:#ffffff; --accent-soft:#341018; --today-bg:#1a0e11;
+  --deadline:#ff5a4a; --deadline-soft:#3a1512;
+  --event:#d58b97; --event-soft:#2a1619;
+  --tag-blue:#1e2836; --tag-green:#1d2b22; --tag-amber:#3a2a12; --tag-rose:#4a1622; --tag-violet:#2d1f38;
+  --shadow:0 12px 40px rgba(0,0,0,.6);
   --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --f-body:"Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  color-scheme:dark;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0f1513; --paper:#161e1b; --ink:#eaf2ef; --muted:#93a39d; --faint:#5f6d68;
-  --line:#25312d; --accent:#2ee0a8; --accent-ink:#06231a; --accent-soft:#123a2e; --today-bg:#122520;
-  --deadline:#ff7a3d; --deadline-soft:#3d2214;
-  --event:#6f9dff; --event-soft:#1b2a4d;
-  --tag-blue:#1f3f80; --tag-green:#1a5a36; --tag-amber:#6a5410; --tag-rose:#6d2440; --tag-violet:#4a2f86;
-  --shadow:0 12px 40px rgba(0,0,0,.5); color-scheme:dark;}}
-:root[data-theme="dark"]{
-  --bg:#0f1513; --paper:#161e1b; --ink:#eaf2ef; --muted:#93a39d; --faint:#5f6d68;
-  --line:#25312d; --accent:#2ee0a8; --accent-ink:#06231a; --accent-soft:#123a2e; --today-bg:#122520;
-  --deadline:#ff7a3d; --deadline-soft:#3d2214;
-  --event:#6f9dff; --event-soft:#1b2a4d;
-  --tag-blue:#1f3f80; --tag-green:#1a5a36; --tag-amber:#6a5410; --tag-rose:#6d2440; --tag-violet:#4a2f86;
-  --shadow:0 12px 40px rgba(0,0,0,.5); color-scheme:dark;}
-
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{margin:0}
