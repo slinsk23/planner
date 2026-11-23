@@ -8,12 +8,12 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&display=swap">
 <style>
 /* Layout: a lined-paper week — five weekday columns plus a stacked weekend column, a Someday list below, deadlines strip on top */
-/* Theme: black paper, maroon/crimson accent, scarlet deadlines — tuned for contrast */
+/* Theme: charcoal paper, true red used as fills and rules with white text on top (no pink text) */
 :root{
-  --bg:#292629; --paper:#44393d; --ink:#f4ecee; --muted:#b8a6aa; --faint:#6e5f63;
-  --line:#3a2e31; --accent:#b3203a; --accent-ink:#ffffff; --accent-text:#ff6b80; --accent-soft:#4a1520; --today-bg:#2a1117;
-  --deadline:#ff8a73; --deadline-soft:#5a1f17;
-  --event:#e88f9c; --event-soft:#2e171b;
+  --bg:#121012; --paper:#1c1719; --ink:#f4ecee; --muted:#b8a6aa; --faint:#6e5f63;
+  --line:#3a2e31; --accent:#b3203a; --accent-ink:#ffffff; --accent-text:#ff4040; --accent-soft:#4a1520; --today-bg:#241014;
+  --red:#d42a33; --deadline:#c42430; --deadline-soft:#6e1220;
+  --event:#e6d9db; --event-soft:#2a2224;
   --tag-blue:#24344c; --tag-green:#233a2a; --tag-amber:#4a3614; --tag-rose:#5a1a28; --tag-violet:#3a2850;
   --shadow:0 12px 40px rgba(0,0,0,.6);
   --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
@@ -27,7 +27,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:1
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
 .wrap{max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
 button,select{font:inherit;color:inherit;cursor:pointer}
-:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px}
+:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 
 header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px}
 .title h1{font-family:var(--f-display);font-weight:700;font-size:clamp(26px,3.4vw,38px);letter-spacing:-.02em;margin:0;line-height:1}
@@ -39,17 +39,17 @@ header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-be
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
 .status{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .pill{font-size:12px;color:var(--muted);border:1px dashed var(--line);border-radius:999px;padding:4px 10px;white-space:nowrap;background:transparent}
-.pill.ok{border-style:solid;color:var(--accent-text);border-color:var(--accent-soft);background:var(--accent-soft)}
+.pill.ok{border-style:solid;color:var(--ink);border-color:var(--accent);background:var(--accent-soft)}
 .pill.cal.ok{color:var(--event);border-color:var(--event-soft);background:var(--event-soft)}
-.pill.warn{border-style:solid;color:var(--deadline);border-color:var(--deadline-soft);background:var(--deadline-soft)}
+.pill.warn{border-style:solid;color:var(--ink);border-color:var(--deadline);background:var(--deadline-soft)}
 button.pill{cursor:pointer}
 select.pill{appearance:none;padding-right:22px;background:var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23889' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 8px center;border-style:solid}
 
 .deadlines{display:flex;gap:10px;align-items:center;flex-wrap:wrap;min-height:32px}
-.deadlines .lbl{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--deadline)}
-.dl{display:flex;gap:8px;align-items:baseline;background:var(--deadline-soft);border-radius:8px;padding:6px 10px;border:1px solid var(--deadline);text-align:left;max-width:100%}
+.deadlines .lbl{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-text)}
+.dl{display:flex;gap:8px;align-items:baseline;background:var(--deadline-soft);border-radius:8px;padding:6px 10px;border:1px solid var(--red);text-align:left;max-width:100%}
 .dl b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:28ch}
-.dl span{color:var(--deadline);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dl span{color:var(--ink);opacity:.85;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 .deadlines .empty{color:var(--faint);font-size:13px}
 
 .board{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) minmax(0,1fr);gap:0 22px;align-items:start}
@@ -59,32 +59,32 @@ select.pill{appearance:none;padding-right:22px;background:var(--paper) url("data
 .day h3 .dow,.day h3 .num{font-size:15px}
 .day h3 .num{color:var(--muted);font-variant-numeric:tabular-nums}
 .day.past h3{border-color:var(--faint);color:var(--muted)}
-.day.today h3{border-color:var(--accent-text);color:var(--accent-text);border-bottom-width:3px}
+.day.today h3{border-color:var(--red);color:var(--ink);border-bottom-width:4px;font-weight:700}
 .day.today h3 .num{background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:0 6px;font-weight:700}
-.day.today ul.lines{background:var(--today-bg);box-shadow:inset 1px 0 0 var(--accent),inset -1px 0 0 var(--accent),inset 0 -1px 0 var(--accent)}
+.day.today ul.lines{background:var(--today-bg);box-shadow:inset 2px 0 0 var(--red),inset -2px 0 0 var(--red),inset 0 -2px 0 var(--red)}
 ul.lines{list-style:none;margin:0;padding:0;min-height:40px;border-radius:0 0 4px 4px}
 .day.drop ul.lines{background:var(--accent-soft)}
 li.row{min-height:34px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:0 4px}
 li.task{cursor:grab;border-radius:4px}
-li.task:hover{box-shadow:inset 0 0 0 1.5px var(--accent-text)}
+li.task:hover{box-shadow:inset 0 0 0 1.5px var(--red)}
 li.task.dragging{opacity:.35}
 li.task[data-color="blue"]{background:var(--tag-blue)} li.task[data-color="green"]{background:var(--tag-green)}
 li.task[data-color="amber"]{background:var(--tag-amber)} li.task[data-color="rose"]{background:var(--tag-rose)}
 li.task[data-color="violet"]{background:var(--tag-violet)}
 li.task.is-deadline:not([data-color]){background:var(--deadline-soft)}
 .check{flex:none;width:16px;height:16px;border-radius:50%;border:1.5px solid var(--muted);background:transparent;padding:0;display:grid;place-items:center}
-.check:hover{border-color:var(--accent-text)}
+.check:hover{border-color:var(--red)}
 li.done .check{background:var(--accent);border-color:var(--accent)}
 li.done .check::after{content:"";width:7px;height:4px;border-left:2px solid var(--accent-ink);border-bottom:2px solid var(--accent-ink);transform:rotate(-45deg) translate(1px,-1px)}
 .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;padding:6px 0}
 li.done .txt{text-decoration:line-through;color:var(--muted)}
-.flag{flex:none;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#2a0c07;background:var(--deadline);border-radius:4px;padding:2px 5px}
+.flag{flex:none;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#ffffff;background:var(--red);border-radius:4px;padding:2px 5px}
 .note-dot{flex:none;width:5px;height:5px;border-radius:50%;background:var(--muted)}
-.cal-dot{flex:none;width:7px;height:7px;border-radius:2px;background:var(--event)}
+.cal-dot{flex:none;width:7px;height:7px;border-radius:2px;background:var(--red)}
 li.event{padding:0}
-li.event a{display:flex;align-items:center;gap:6px;width:100%;min-height:28px;margin:3px 0;padding:0 8px;border-radius:6px;background:var(--event-soft);color:var(--ink);text-decoration:none;font-size:12.5px;min-width:0}
-li.event a:hover{box-shadow:inset 0 0 0 1.5px var(--event)}
-li.event .t{font-variant-numeric:tabular-nums;color:var(--event);font-weight:700;flex:none}
+li.event a{display:flex;align-items:center;gap:6px;width:100%;min-height:28px;margin:3px 0;padding:0 8px;border-radius:6px;border-left:3px solid var(--red);background:var(--event-soft);color:var(--ink);text-decoration:none;font-size:12.5px;min-width:0}
+li.event a:hover{box-shadow:inset 0 0 0 1.5px var(--red)}
+li.event .t{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:700;flex:none}
 li.event .e{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 input.add{flex:1;min-width:0;border:0;background:transparent;font:inherit;color:var(--ink);padding:6px 0;outline:none}
 input.add::placeholder{color:transparent}
@@ -152,7 +152,7 @@ li.blank{cursor:text}
   <div class="deadlines" id="deadlines"></div>
   <main class="board" id="board"></main>
   <section class="someday" id="someday"></section>
-  <p class="hint">Click any line to add a task and press Enter. Start a task with <b>!</b> to mark it as a deadline. Pink items come from your Google Calendar; your tasks also appear in Google Calendar on the “Tasks and Deadlines” calendar, move with them when you change their date, and disappear when you check them off. Drag tasks between days, click one to edit it. Use ← → to change weeks. Tasks are saved in this browser, so use Settings → Export backup now and then.</p>
+  <p class="hint">Click any line to add a task and press Enter. Start a task with <b>!</b> to mark it as a deadline. Grey items with a red edge come from your Google Calendar; your tasks also appear in Google Calendar on the “Tasks and Deadlines” calendar, move with them when you change their date, and disappear when you check them off. Drag tasks between days, click one to edit it. Use ← → to change weeks. Tasks are saved in this browser, so use Settings → Export backup now and then.</p>
 </div>
 
 <!-- task editor -->
