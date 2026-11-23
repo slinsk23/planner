@@ -165,7 +165,7 @@ li.blank{cursor:text}
   <div class="deadlines" id="deadlines"></div>
   <main class="board" id="board"></main>
   <section class="someday" id="someday"></section>
-  <p class="hint">Click any line to add a task and press Enter. Start a task with <b>!</b> to mark it as a deadline. Blue items come from your Google Calendar; your tasks also appear in Google Calendar on the “Tasks and Deadlines” calendar. Drag tasks between days, click one to edit it. Use ← → to change weeks. Tasks are saved in this browser, so use Settings → Export backup now and then.</p>
+  <p class="hint">Click any line to add a task and press Enter. Start a task with <b>!</b> to mark it as a deadline. Blue items come from your Google Calendar; your tasks also appear in Google Calendar on the “Tasks and Deadlines” calendar, move with them when you change their date, and disappear when you check them off. Drag tasks between days, click one to edit it. Use ← → to change weeks. Tasks are saved in this browser, so use Settings → Export backup now and then.</p>
 </div>
 
 <!-- task editor -->
@@ -288,7 +288,8 @@ window.addEventListener('storage',e=>{if(e.key==='planner.tasks'){store.load();r
 const tasksFor=k=>[...store.tasks.values()].filter(t=>t.date===k).sort((a,b)=>(a.order??0)-(b.order??0)||(a.created??0)-(b.created??0));
 
 /* ---------- Google auth ---------- */
-const G={client:null,token:null,exp:0,state:'off',waiters:[]};
+const G={client:null,token:null,exp:0,state:'off',waiters:[],refreshing:false};
+const pendingCount=()=>[...store.tasks.values()].filter(t=>t.gPending).length;
 function clientId(){return ls.get('planner.clientId','').trim();}
 function setG(state,msg){
   G.state=state;
@@ -296,6 +297,8 @@ function setG(state,msg){
   const el=document.createElement(state==='ok'||state==='busy'?'span':'button');
   el.className='pill cal'+(state==='ok'?' ok':(state==='off'?'':' warn'));
   el.textContent={ok:'Google linked',busy:'Connecting to Google…',off:'Connect Google',expired:'Reconnect Google',error:'Google error · Retry',setup:'Set up Google'}[state]||'Connect Google';
+  const waiting=pendingCount();
+  if(waiting&&state!=='ok'&&state!=='busy') el.textContent+=` · ${waiting} change${waiting>1?'s':''} waiting`;
   if(el.tagName==='BUTTON'){el.type='button';el.onclick=()=>clientId()?connect(true):openSettings();}
   if(msg) el.title=msg;
   slot.append(el);
@@ -309,16 +312,17 @@ function initClient(){
 }
 function onToken(r){
   if(r&&r.access_token){
-    G.token=r.access_token;G.exp=Date.now()+((r.expires_in||3600)-60)*1000;
+    G.token=r.access_token;G.exp=Date.now()+((r.expires_in||3600)-60)*1000;G.refreshing=false;
+    clearTimeout(G.refreshTimer);G.refreshTimer=setTimeout(()=>refreshToken(),Math.max(60e3,G.exp-Date.now()-5*60e3));
     ls.set('planner.gConnected','1');setG('ok');
     G.waiters.splice(0).forEach(w=>w.res(G.token));
     loadEvents();flushPending();
   }else onTokenError(r);
 }
 function onTokenError(err){
-  G.token=null;
+  G.token=null;G.refreshing=false;
   const msg=(err&&(err.error_description||err.message||err.type||err.error))||'Sign-in was cancelled';
-  setG(clientId()?'off':'setup',msg);
+  setG(!clientId()?'setup':(ls.get('planner.gConnected','')?'expired':'off'),msg);
   G.waiters.splice(0).forEach(w=>w.rej(new Error(msg)));
 }
 function connect(interactive){
@@ -328,14 +332,23 @@ function connect(interactive){
   setG('busy');
   G.client.requestAccessToken({prompt:interactive?'':'none'});
 }
+function hasToken(){return !!G.token&&Date.now()<G.exp;}
+/* Quietly ask Google for a fresh token (no account picker). Google tokens last about an hour;
+   without this, changes made after the first hour were only queued until you pressed Reconnect. */
+function refreshToken(){
+  if(hasToken()||G.refreshing||!clientId()||!ls.get('planner.gConnected','')||location.protocol==='file:') return;
+  if(!initClient()) return;
+  G.refreshing=true;G.token=null;
+  try{G.client.requestAccessToken({prompt:'none'});}catch(e){G.refreshing=false;setG('expired');}
+}
 function getToken(){
-  if(G.token&&Date.now()<G.exp) return Promise.resolve(G.token);
+  if(hasToken()) return Promise.resolve(G.token);
   return Promise.reject(Object.assign(new Error('not connected'),{code:'auth'}));
 }
 async function gapi(method,url,body){
   const tok=await getToken();
   const r=await fetch(url,{method,headers:{Authorization:'Bearer '+tok,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
-  if(r.status===401){G.token=null;setG('expired');throw Object.assign(new Error('expired'),{code:'auth'});}
+  if(r.status===401){G.token=null;setG('expired');refreshToken();throw Object.assign(new Error('expired'),{code:'auth'});}
   if(r.status===204) return null;
   if(!r.ok){let t='';try{t=(await r.json()).error.message;}catch(_){}throw Object.assign(new Error(t||('HTTP '+r.status)),{code:r.status});}
   return r.json();
@@ -368,9 +381,9 @@ async function loadEvents(){
 const CALAPI='https://www.googleapis.com/calendar/v3';
 const syncQ=new Map();
 let calIdPromise=null;
-function wantsSync(t){if(!t||!isDated(t.date)||syncMode==='off')return false;return syncMode==='all'||!!t.deadline;}
+function wantsSync(t){if(!t||!isDated(t.date)||t.done||syncMode==='off')return false;return syncMode==='all'||!!t.deadline;}
 function evBody(t){
-  const b={summary:(t.done?'✓ ':'')+(t.deadline?'Due: ':'')+t.text,
+  const b={summary:(t.deadline?'Due: ':'')+t.text,
     description:(t.notes?t.notes+'\n\n':'')+MARK+t.id,
     start:{date:t.date},end:{date:keyOf(addDays(parseKey(t.date),1))},
     transparency:'transparent',
@@ -406,13 +419,15 @@ function ensureCal(){
 function evURL(calId,eid){return CALAPI+'/calendars/'+encodeURIComponent(calId)+'/events'+(eid?'/'+encodeURIComponent(eid):'');}
 function sync(id){
   const t=store.tasks.get(id);if(!t)return;
-  if(!G.token){
-    if(wantsSync(t)||t.gEventId) store.put({...t,gPending:true},true);
+  if(!hasToken()){
+    if(wantsSync(t)||t.gEventId){store.put({...t,gPending:true},true);setG(G.refreshing?'busy':(clientId()?(ls.get('planner.gConnected','')?'expired':'off'):'setup'));}
+    refreshToken();
     return;
   }
   const next=(syncQ.get(id)||Promise.resolve()).then(()=>doSync(id)).catch(e=>{
     console.warn(e);const cur=store.tasks.get(id);if(cur)store.put({...cur,gPending:true},true);
     if(e.code!=='auth')toast('Couldn’t update Google Calendar: '+e.message);
+    else setG(G.state);
   });
   syncQ.set(id,next);
 }
@@ -447,7 +462,7 @@ async function doSync(id,retry){
 function unsync(t){
   if(!t.gEventId) return;
   const calId=t.gCalId||ls.get('planner.calId','');if(!calId)return;
-  if(!G.token){const q=JSON.parse(ls.get('planner.gDeletes2','[]'));q.push([calId,t.gEventId]);ls.set('planner.gDeletes2',JSON.stringify(q));return;}
+  if(!hasToken()){const q=JSON.parse(ls.get('planner.gDeletes2','[]'));q.push([calId,t.gEventId]);ls.set('planner.gDeletes2',JSON.stringify(q));refreshToken();return;}
   gapi('DELETE',evURL(calId,t.gEventId)).catch(e=>{if(e.code!==404&&e.code!==410)toast('Task deleted here, but not from Google Calendar.');});
 }
 function flushPending(){
@@ -455,7 +470,11 @@ function flushPending(){
   ls.set('planner.gDeletes2','[]');
   q.forEach(([c,e])=>gapi('DELETE',evURL(c,e)).catch(()=>{}));
   // pending changes, plus anything from the old Google Tasks version that never got a calendar event
-  [...store.tasks.values()].filter(t=>t.gPending||t.gTaskId||(wantsSync(t)&&!t.gEventId&&t.date>=keyOf(new Date()))).forEach(t=>sync(t.id));
+  const today=keyOf(new Date());
+  [...store.tasks.values()].filter(t=>t.gPending||t.gTaskId
+    ||(wantsSync(t)&&!t.gEventId&&t.date>=today)   // dated task missing from the calendar
+    ||(!wantsSync(t)&&t.gEventId)                   // checked off, undated or filtered out: remove it
+  ).forEach(t=>sync(t.id));
 }
 
 /* ---------- render ---------- */
@@ -578,13 +597,14 @@ document.addEventListener('keydown',e=>{
 $('#prev').onclick=()=>goWeek(addDays(weekStart,-7));
 $('#next').onclick=()=>goWeek(addDays(weekStart,7));
 $('#todayBtn').onclick=()=>goWeek(mondayOf(new Date()));
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(G.token&&Date.now()>=G.exp){G.token=null;setG('expired');}else loadEvents();}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)return;if(G.token&&!hasToken()){G.token=null;setG('expired');}if(hasToken())loadEvents();else refreshToken();});
 
 /* editor */
 let editing=null,editColor='';
 function setColor(c){editColor=c;document.querySelectorAll('.sw').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c===c)));}
 function gNote(t){
-  if(t.gEventId) return 'This task is on your “Tasks and Deadlines” calendar. Changes here update it there.';
+  if(t.done) return 'Checked-off tasks are removed from Google Calendar. Uncheck it to put it back.';
+  if(t.gEventId) return 'This task is on your “Tasks and Deadlines” calendar. Changes here, including a new date, update it there.';
   if(!isDated(t.date)) return 'Give this task a date to add it to Google Calendar.';
   if(syncMode==='off') return 'Sending to Google Calendar is turned off in Settings.';
   if(syncMode==='deadlines'&&!t.deadline) return 'Mark this as a deadline to add it to Google Calendar.';
